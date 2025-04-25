@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gatsby QA Flashcards</title>
+  <link rel="stylesheet" href="style.css" />
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.4.1/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+</head>
+<body>
+  <div class="container-main">
+    <h1 class="app-title">Gatsby QA Flashcards</h1>
+    <div id="conversation"></div>
+  </div>
+
+  <div id="footerInput">
+    <div class="input-container">
+      <input
+        id="questionInput"
+        type="text"
+        class="chat-input"
+        placeholder="Ask me anything..."
+      />
+      <button id="askBtn" class="send-btn" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    
+    const conv = document.getElementById('conversation');
+    const input = document.getElementById('questionInput');
+
+    async function sendQuestion() {
+      const question = input.value.trim();
+      if (!question) return;
+
+      // Show question + spinner
+      const entry = document.createElement('div');
+      entry.className = 'entry';
+
+      const qElem = document.createElement('div');
+      qElem.className = 'question-text';
+      qElem.innerText = question;
+      entry.appendChild(qElem);
+
+      const spinner = document.createElement('div');
+      spinner.className = 'loading';
+      spinner.innerHTML =
+        '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+      entry.appendChild(spinner);
+
+      conv.appendChild(entry);
+      window.scrollTo(0, document.body.scrollHeight);
+      input.value = '';
+
+      // Fetch answer
+      const resp = await fetch('http://127.0.0.1:8000/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question })
+      });
+      const { cards } = await resp.json();
+      entry.removeChild(spinner);
+
+      // Split into sentences → cards
+      const full = cards.join(' ');
+      const points = full
+        .split('.')
+        .map(s => s.trim())
+        .filter(s => s.length)
+        .map(s => s + '.');
+
+      // Render flashcards
+      const grid = document.createElement('div');
+      grid.className = 'flashcard-grid';
+      points.forEach(text => {
+        const card = document.createElement('div');
+        card.className = 'flashcard';
+        card.onclick = () => card.classList.toggle('flipped');
+
+        const body = document.createElement('div');
+        body.className = 'card-body';
+
+        const para = document.createElement('p');
+        para.className = 'card-text';
+        para.innerText = text;
+
+        body.appendChild(para);
+        card.appendChild(body);
+        grid.appendChild(card);
+      });
+
+      entry.appendChild(grid);
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    document.getElementById('askBtn').onclick = sendQuestion;
+    input.addEventListener('keypress', e => {
+      if (e.key === 'Enter') sendQuestion();
+    });
+  </script>
+</body>
+</html>

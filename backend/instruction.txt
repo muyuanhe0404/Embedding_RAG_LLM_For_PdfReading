@@ -1,0 +1,8 @@
+first terminal:
+    cd backend
+    uvicorn main:app --reload
+second terminal:
+    cd frontend
+    python3 -m http.server 8080
+open to test:
+    http://localhost:8080/index.html
