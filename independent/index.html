@@ -8,8 +8,13 @@
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.4.1/dist/css/bootstrap.min.css"
     rel="stylesheet"
   />
+  <link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
 </head>
 <body>
+  
   <div class="container-main">
     <h1 class="app-title">Gatsby QA Flashcards</h1>
     <div id="conversation"></div>
@@ -21,7 +26,7 @@
         id="questionInput"
         type="text"
         class="chat-input"
-        placeholder="Ask me anything..."
+        placeholder="Ask me anything about The Great Gatsby!"
       />
       <button id="askBtn" class="send-btn" aria-label="Send">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -43,7 +48,6 @@
       const question = input.value.trim();
       if (!question) return;
 
-      // Show question + spinner
       const entry = document.createElement('div');
       entry.className = 'entry';
 
@@ -54,15 +58,19 @@
 
       const spinner = document.createElement('div');
       spinner.className = 'loading';
-      spinner.innerHTML =
-        '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+      spinner.innerHTML = `
+        <div class="skeleton-card">
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line"></div>
+        </div>
+      `;
       entry.appendChild(spinner);
 
       conv.appendChild(entry);
       window.scrollTo(0, document.body.scrollHeight);
       input.value = '';
 
-      // Fetch answer
       const resp = await fetch('/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,7 +79,6 @@
       const { cards } = await resp.json();
       entry.removeChild(spinner);
 
-      // Split into sentences → cards
       const full = cards.join(' ');
       const points = full
         .split('.')
@@ -79,27 +86,30 @@
         .filter(s => s.length)
         .map(s => s + '.');
 
-      // Render flashcards
       const grid = document.createElement('div');
       grid.className = 'flashcard-grid';
+
+      const card = document.createElement('div');
+      card.className = 'flashcard';
+
+      const body = document.createElement('div');
+      body.className = 'card-body';
+
+      const ul = document.createElement('ul');
+      ul.className = 'card-list';
+
       points.forEach(text => {
-        const card = document.createElement('div');
-        card.className = 'flashcard';
-        card.onclick = () => card.classList.toggle('flipped');
-
-        const body = document.createElement('div');
-        body.className = 'card-body';
-
-        const para = document.createElement('p');
-        para.className = 'card-text';
-        para.innerText = text;
-
-        body.appendChild(para);
-        card.appendChild(body);
-        grid.appendChild(card);
+        const li = document.createElement('li');
+        li.className = 'card-list-item';
+        li.innerText = text;
+        ul.appendChild(li);
       });
 
+      body.appendChild(ul);
+      card.appendChild(body);
+      grid.appendChild(card);
       entry.appendChild(grid);
+
       window.scrollTo(0, document.body.scrollHeight);
     }
 

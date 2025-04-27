@@ -14,57 +14,64 @@ body {
     text-align: center;
     font-size: 1.75rem;
     font-weight: 600;
-    margin-bottom: 1.5rem;
+    margin-bottom: 3rem;
     color: #111827;
   }
   
   /* Conversation entries */
   .entry {
-    margin-bottom: 2rem;
+    margin-bottom: 4rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
   .question-text {
     align-self: flex-end;
-    background: #3b82f6;
-    color: white;
+    background: #f1f3f5;    
+    color: #111827;         
     padding: 0.75rem 1rem;
     border-radius: 1rem 1rem 0.25rem 1rem;
     max-width: 75%;
     word-wrap: break-word;
+    border: 1px solid #e5e7eb; 
   }
   
-  /* Flashcard grid */
+  /* Flashcard */
   .flashcard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-    gap: 1rem;
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 1rem;
   }
+
   .flashcard {
-    background: #fff;
+    max-width: 250px;   
+    width: 100%;
+    height: auto;
+    padding: 1rem;
+    background: #f9fafb;
     border: 1px solid #e5e7eb;
-    border-radius: 0.75rem;
-    height: 18rem;
-    width: 12rem;
+    border-radius: 1rem;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    cursor: pointer;
+    cursor: pointer;   
+    overflow: visible;
     transition: transform 0.2s;
-    overflow: hidden;
   }
+
   .flashcard:hover {
     transform: translateY(-4px);
+    cursor: pointer;
   }
   .flashcard .card-body {
     padding: 1rem;
-    height: calc(18rem - 2rem);
+    height: auto;
     overflow-y: auto;
   }
   .flashcard .card-text {
-    color: #111827;
-    line-height: 1.5;
-    font-size: 1rem;
-    margin: 0;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;   
+    font-size: 1rem;    
+    line-height: 1.5;   
+    color: #111827;     
   }
   
   /* Footer input bar */
@@ -73,10 +80,10 @@ body {
     bottom: 0;
     left: 0;
     width: 100%;
-    padding: 0.75rem 0;
-    background: rgba(255,255,255,0.8);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+    padding: 1.5rem 0;
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
   }
   .input-container {
     max-width: 900px;
@@ -84,7 +91,8 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0 1rem;
+    padding: 1 1rem;
+    position: relative;
   }
   .chat-input {
     flex: 1;
@@ -92,25 +100,27 @@ body {
     border: none;
     border-radius: 999px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    font-size: 1rem;
+    font-size: 1.1rem;
     outline: none;
+    height: 2rem;            
+    line-height: 2rem;       
   }
   .chat-input:focus {
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   }
   .send-btn {
-    background: none;
+    position: absolute;
+    top: 50%;
+    right: 2rem;           
+    transform: translateY(-50%);
+    background: none;         
     border: none;
-    padding: 0.5rem;
+    padding: 0;
     cursor: pointer;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   .send-btn svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.7rem;
+    height: 1.7rem;
     color: #3b82f6;
     transition: transform 0.2s;
   }
@@ -121,7 +131,64 @@ body {
   /* Loading spinner */
   .loading {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 1rem;
   }
+  .card-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .card-list-item {
+    position: relative;
+    padding-left: 1.8rem;
+    margin-bottom: 0.75rem;
+  }
+  .card-list-item::before {
+    content: '✔';
+    position: absolute;
+    left: 0;
+    top: 0.1rem;
+    color: #10B981;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .skeleton-card {
+    max-width: 250px;
+    width: 100%;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    position: relative;
+    margin-top: 1rem;
+  }
+
+  .skeleton-line {
+    height: 1rem;
+    background: #cbd5e1;
+    margin-bottom: 0.75rem;
+    border-radius: 0.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton-line.short {
+    width: 40%;
+  }
+
+  .skeleton-line::after {
+    content: "";
+    position: absolute;
+    top: 0; left: -150%;
+    width: 150%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(100%); }
+  }
+
   
