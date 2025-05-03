@@ -1,165 +1,243 @@
 import os
-os.environ["TRANSFORMERS_NO_TF"] = "1"
-DATA_DIR = '/content/drive/MyDrive/independent'
-os.makedirs(DATA_DIR, exist_ok=True)
-PDF_PATH = os.path.join(DATA_DIR, 'the-great-gatsby.pdf')
-
 import pickle
-from pdfminer.high_level import extract_text
-from sentence_transformers import SentenceTransformer
-import faiss
+import json
+import logging
 
-def load_pdf(path):
+import faiss
+import openai
+import torch
+from pdfminer.high_level import extract_text
+from sentence_transformers import SentenceTransformer, CrossEncoder
+
+# Environment
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
+# API key
+openai.api_key = "secret-key" # using your own api key
+
+# Paths
+DATA_DIR = "/content/drive/MyDrive/independent"
+os.makedirs(DATA_DIR, exist_ok=True)
+PDF_PATH = os.path.join(DATA_DIR, "the-great-gatsby.pdf")
+INDEX_PATH = os.path.join(DATA_DIR, "gatsby_index.faiss")
+CHUNKS_PATH = os.path.join(DATA_DIR, "chunks.pkl")
+
+logger = logging.getLogger(__name__)
+
+def load_pdf(path: str) -> str:
     return extract_text(path)
 
-def chunk_text(text, chunk_size=500, overlap=100):
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
     tokens = text.split()
     chunks = []
     start = 0
     while start < len(tokens):
-        chunks.append(" ".join(tokens[start:start+chunk_size]))
+        chunks.append(" ".join(tokens[start : start + chunk_size]))
         start += chunk_size - overlap
     return chunks
 
-def build_index(chunks, model_name='paraphrase-MiniLM-L6-v2'):
-    model = SentenceTransformer(model_name, device='cuda')
+def build_index(chunks: list[str], model_name: str = "paraphrase-MiniLM-L6-v2"):
+    model = SentenceTransformer(model_name, device="cuda")
     embeddings = model.encode(chunks, show_progress_bar=True, convert_to_numpy=True)
-    idx = faiss.IndexFlatL2(embeddings.shape[1])
-    idx.add(embeddings)
-    return idx
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(embeddings)
+    return index
 
-text = load_pdf(PDF_PATH)
-chunks = chunk_text(text)
-index = build_index(chunks)
-faiss.write_index(index, os.path.join(DATA_DIR, 'gatsby_index.faiss'))
-with open(os.path.join(DATA_DIR, 'chunks.pkl'), 'wb') as f:
-    pickle.dump(chunks, f)
-print(f"Saved {len(chunks)} chunks and FAISS index.")
+# Build or load FAISS index + chunks
+if not os.path.exists(INDEX_PATH) or not os.path.exists(CHUNKS_PATH):
+    text = load_pdf(PDF_PATH)
+    chunks = chunk_text(text)
+    index = build_index(chunks)
+    faiss.write_index(index, INDEX_PATH)
+    with open(CHUNKS_PATH, "wb") as f:
+        pickle.dump(chunks, f)
+    print(f"Saved {len(chunks)} chunks and FAISS index.")
+else:
+    index = faiss.read_index(INDEX_PATH)
+    with open(CHUNKS_PATH, "rb") as f:
+        chunks = pickle.load(f)
 
+# Embedding and cross-encoder models
+embed_model   = SentenceTransformer("paraphrase-MiniLM-L6-v2", device="cuda")
+cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cuda")
 
-apikey = '<hugging face key>' #put secret key here
-from huggingface_hub import login
-login(token=apikey)
-
-import torch
-from transformers import (
-    BitsAndBytesConfig,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    pipeline,
-)
-
-
-quant_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True,
-)
-
-model = AutoModelForCausalLM.from_pretrained(
-    "meta-llama/Llama-2-7b-chat-hf",
-    quantization_config=quant_config,
-    device_map={"": "cuda:0"}     
-)
-
-
-tokenizer = AutoTokenizer.from_pretrained(
-    "meta-llama/Llama-2-7b-chat-hf",
-    use_fast=False
-)
-
-generator = pipeline(
-    "text-generation",      
-    model=model,
-    tokenizer=tokenizer,
-    max_new_tokens=60,     
-    do_sample=True,         
-    top_k=50,
-    top_p=0.9,
-    temperature=0.7,
-    repetition_penalty=1.1,
-    return_full_text=False
-)
-
-
-
-import faiss
-import pickle
-from sentence_transformers import SentenceTransformer,CrossEncoder
-
-index = faiss.read_index(os.path.join(DATA_DIR, 'gatsby_index.faiss'))
-with open(os.path.join(DATA_DIR, 'chunks.pkl'), 'rb') as f:
-    chunks = pickle.load(f)
-
-embed_model   = SentenceTransformer('paraphrase-MiniLM-L6-v2', device='cuda')
-cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda')
-
-def retrieve(question: str, top_k: int = 3, fetch_k: int = 6):
+def retrieve(question: str, top_k: int = 3, fetch_k: int = 6) -> list[str]:
     q_vec = embed_model.encode(question, convert_to_numpy=True)
-    _, idxs = index.search(q_vec.reshape(1, -1), fetch_k)
-    candidates = [chunks[i] for i in idxs[0]]
+    _, ids = index.search(q_vec.reshape(1, -1), fetch_k)
+    candidates = [chunks[i] for i in ids[0]]
     scores = cross_encoder.predict([(question, txt) for txt in candidates])
     ranked = [txt for _, txt in sorted(zip(scores, candidates), reverse=True)]
     return ranked[:top_k]
 
-def answer_rag(question: str, top_k: int = 5):
+def answer_rag_json(question: str, top_k: int = 5) -> dict:
     docs = retrieve(question, top_k=top_k)
     context = "\n\n".join(d.replace("\n", " ") for d in docs)
 
-    few_shot = """
-Example:
-Q: What does the Valley of Ashes symbolize in The Great Gatsby?
-A: The Valley of Ashes symbolizes the moral decay lurking beneath the era’s glamour, representing the cost of unbridled industrial progress.
-
-Example:
-Q: How does Gatsby’s smile affect those around him?
-A: Gatsby’s smile conveys both warmth and mystery, making others feel instantly at ease while also curious about the man behind it.
-
-Now it’s your turn, answer in **exactly one sentence around 20 words** (no more, no less), ending with a single period:
-"""
-
-    prompt = (
-        few_shot +
-        "Context:\n" + context + "\n\n" +
-        f"Q: {question}\n" +
-        "A:"
+    system_prompt = (
+        "You are a knowledgeable literary analysis assistant. "
+        "For each user question, first generate one concise `title` derived from the question, then one descriptive `subtitle`. "
+        "Next, using the provided context, identify the core symbols or motifs present. "
+        "Always include a `quote_page` integer for each symbol and the full, un-truncated `key_quote` end with period. "
+        "Supply a `page_references` array with as many descriptive entries as are relevant—do not default to any particular number. "
+        "For the `analysis` field, provide a concise yet thoughtful multi-sentence explanation (around 2–3 sentences) that elaborates on the symbol’s thematic role without imposing a strict word limit. "
+        "For the page reference, give me at least 3 references depending on the questions."
+        "Output only a single JSON object exactly matching the schema."
     )
-    raw = generator(prompt)[0]['generated_text']
 
-    if "Example:" in raw:
-        raw = raw.split("Example:")[0]
+    few_shot_messages = [
+        {
+            "role": "user",
+            "content": """
+Context (from relevant passages):
+“He stretched out his arms toward the dark water in a curious way and far as I was from him I could have sworn he was trembling. Involuntarily I glanced seaward—and distinguished nothing except a single green light, minute and far away, that might have been the end of a dock.”
 
-    answer = raw.strip().split("\n")[0]
+User’s question:
+"What does the green light symbolize?"
 
-    return answer.strip()
+Please answer using the JSON schema:
+{
+  "title": "<Your title>",
+  "subtitle": "<Your subtitle>",
+  "items": [ { /* one symbol */ } ]
+}
+"""
+        },
+        {
+            "role": "assistant",
+            "content": """
+{
+  "title": "Symbolism of the Green Light",
+  "subtitle": "An exploration of Gatsby’s hopes and the broader American Dream.",
+  "items": [
+    {
+      "name": "The Green Light",
+      "description": "A beacon at the end of Daisy’s dock symbolizing hope and aspiration.",
+      "analysis": "The green light represents Gatsby’s yearning for Daisy and the promise of a newer future. It also embodies the larger American Dream, calling attention to both its allure and its inevitable elusiveness as characters grapple with idealism versus reality.",
+      "key_quote": "He stretched out his arms toward the dark water in a curious way and far as I was from him I could have sworn he was trembling. Involuntarily I glanced seaward—and distinguished nothing except a single green light, minute and far away, that might have been the end of a dock.",
+      "quote_page": 23,
+      "page_references": [
+        {"label": "Initial mention on Daisy’s dock", "page": 23},
+        {"label": "Gatsby’s reflective gaze", "page": 91}
+      ]
+    }
+  ]
+}
+"""
+        },
+        {
+            "role": "user",
+            "content": """
+Context (from relevant passages):
+“This is a valley of ashes—a fantastic farm where ashes grow like wheat into ridges and hills and grotesque gardens; where ashes take the forms of houses...”
 
-import time
+User’s question:
+"What is the significance of the Valley of Ashes?"
 
-test_questions = [
-    "What is the significance of the green light at the end of Daisy’s dock?",
-    "How does the Valley of Ashes illustrate the novel’s critique of moral decay?",
-    "What role does Nick Carraway play as narrator, and how does his perspective shape the story?",
-    "In what ways does Daisy Buchanan embody both illusion and reality?",
-    "Why does Gatsby throw lavish parties, and what do they reveal about his character?"
-    # "How does Fitzgerald use the contrast between East Egg and West Egg to comment on social class?",
-    # "What does the billboard of Dr. T. J. Eckleburg’s eyes symbolize?",
-    # "How does the weather (sunshine, rain, heat) mirror the emotional tone of key scenes?",
-    # "What does Tom Buchanan represent in the context of wealth and power?",
-    # "How is the American Dream portrayed as both promise and illusion in the novel?",
-    # "What is the significance of Gatsby’s reunion with Daisy at Nick’s house?",
-    # "How does Myrtle Wilson’s fate underscore the novel’s themes of desire and destruction?"
-]
+Please answer using the same JSON schema as above.
+"""
+        },
+        {
+            "role": "assistant",
+            "content": """
+{
+  "title": "Meaning of the Valley of Ashes",
+  "subtitle": "An analysis of social decay and moral corruption symbolized by the wasteland.",
+  "items": [
+    {
+      "name": "The Valley of Ashes",
+      "description": "A bleak wasteland between West Egg and New York City symbolizing industrial and moral decay.",
+      "analysis": "The Valley of Ashes starkly depicts the fallout of unbridled ambition and materialism. Its dusty expanse reflects the moral emptiness beneath the era’s glamorous facade, emphasizing the chasm between wealth and ethical integrity.",
+      "key_quote": "This is a valley of ashes—a fantastic farm where ashes grow like wheat into ridges and hills and grotesque gardens; where ashes take the forms of houses...",
+      "quote_page": 27,
+      "page_references": [
+        {"label": "Eckleburg’s eyes overlooking the ashes", "page": 27},
+        {"label": "Scene of Myrtle’s demise", "page": 156},
+        {"label": "Nick’s reflection on its symbolism", "page": 162}
+      ]
+    }
+  ]
+}
+"""
+        }
+    ]
 
-for q in test_questions:
-    start = time.perf_counter()
+    schema = """{
+  "title": "<A concise, question-derived title>",
+  "subtitle": "<A descriptive subtitle reflecting the question’s focus>",
+  "items": [
+    {
+      "name": "<Symbol or motif name>",
+      "description": "<Brief description>",
+      "analysis": "<An explanation of around 2–3 sentences that explores thematic significance>",
+      "key_quote": "<The full, un-truncated quote illustrating the symbol>",
+      "quote_page": <int>,
+      "page_references": [
+        { "label": "<Descriptive label>", "page": <int> }
+      ]
+    }
+  ]
+}"""
+
+    user_prompt = (
+        f"Context (from relevant passages):\n{context}\n\n"
+        f"User’s question:\n\"{question}\"\n\n"
+        "Please answer using the JSON schema below, generating one title and one subtitle based on the question. \n"
+        "There should be at least 3 page references. \n"
+        "Also round 5 items will be perfect!\n"
+        + schema
+    )
+
+    messages = [{"role": "system", "content": system_prompt}] + few_shot_messages + [{"role": "user", "content": user_prompt}]
+
+    response = openai.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        temperature=0.7,
+    )
+
+    raw = response.choices[0].message.content.strip()
+    logger.debug("ChatGPT raw output: %s", raw)
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start < 0 or end < 0 or start >= end:
+        logger.error("Invalid JSON in response: %s", raw)
+        raise ValueError("Invalid JSON from ChatGPT")
+
+    json_str = raw[start : end + 1]
     try:
-        answer = answer_rag(q)
-    except Exception as e:
-        answer = f"Error: {e}"
-    elapsed = time.perf_counter() - start
-    print("Q:", q)
-    print("A:", answer)
-    print(f"→ Time: {elapsed:.3f} s")
-    print("-" * 80)
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        logger.error("JSON decode failed: %s", e)
+        logger.error("JSON string was: %s", json_str)
+        raise
+
+
+    return data
+
+# import time
+
+# test_questions = [
+#     # "What is the significance of the green light at the end of Daisy’s dock?",
+#     # "How does the Valley of Ashes illustrate the novel’s critique of moral decay?",
+#     # "What role does Nick Carraway play as narrator?",
+#     # "In what ways does Daisy Buchanan embody both illusion and reality?",
+#     # "Why does Gatsby throw lavish parties?"
+#     "What are the major symbols in The Great Gatsby, and what do they each represent?",
+#     "How does The Great Gatsby portray different social classes",
+#     "What are the major themes of the novel"
+# ]
+
+# for q in test_questions:
+#     start = time.perf_counter()
+#     try:
+#         answer = answer_rag_json(q)
+#     except Exception as e:
+#         answer = f"Error: {e}"
+#     elapsed = time.perf_counter() - start
+#     print("Q:", q)
+#     print("A:", answer)
+#     print(f"→ Time: {elapsed:.3f} s")
+#     print("-" * 80)
 

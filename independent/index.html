@@ -1,121 +1,230 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Gatsby QA Flashcards</title>
-  <link rel="stylesheet" href="static/style.css"/>
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.4.1/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <link
-  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
-  rel="stylesheet"
-/>
+  <title>Gatsby Symbols Explorer</title>
+  <link rel="stylesheet" href="static/style.css" />
 </head>
 <body>
-  
   <div class="container-main">
-    <h1 class="app-title">Gatsby QA Flashcards</h1>
-    <div id="conversation"></div>
-  </div>
 
-  <div id="footerInput">
-    <div class="input-container">
-      <input
-        id="questionInput"
-        type="text"
-        class="chat-input"
-        placeholder="Ask me anything about The Great Gatsby!"
-      />
-      <button id="askBtn" class="send-btn" aria-label="Send">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"></line>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-        </svg>
-      </button>
+    <!-- Header (hidden until first query) -->
+    <header class="header">
+      <h1 id="page-title"></h1>
+      <p id="page-subtitle" class="app-subtitle"></p>
+    </header>
+
+    <!-- Welcome screen -->
+    <section id="welcome-screen">
+      <h2>Ask me about “The Great Gatsby”</h2>
+      <p class="welcome-sub">Type a question about characters, symbols, or plot points</p>
+      <div class="suggestions-grid">
+        <div
+          class="suggestion-card"
+          onclick="askGatsby('Tell me about Gatsby’s life and experiences')"
+        >
+          <strong>Try asking about:</strong>
+          <p>“Tell me about Gatsby’s life and experiences”</p>
+        </div>
+        <div
+          class="suggestion-card"
+          onclick="askGatsby('Tell me about the women characters in the book')"
+        >
+          <strong>Try asking about:</strong>
+          <p>“Tell me about the women characters in the book”</p>
+        </div>
+        <div
+          class="suggestion-card"
+          onclick="askGatsby('What are the major symbols in The Great Gatsby?')"
+        >
+          <strong>Try asking about:</strong>
+          <p>“What are the major symbols in The Great Gatsby?”</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabbed panels (hidden until first query) -->
+    <div class="tabs-wrapper"></div>
+    <div class="panels-container" id="panels-container"></div>
+
+    <!-- Chat input -->
+    <div class="chat-container" id="footerInput">
+      <div class="input-container">
+        <input
+          id="chatInput"
+          type="text"
+          class="chat-input"
+          placeholder="Ask about Gatsby symbols…"
+        />
+        <button class="send-btn" id="sendBtn" disabled>➤</button>
+      </div>
     </div>
   </div>
 
-
   <script>
-    
-    const conv = document.getElementById('conversation');
-    const input = document.getElementById('questionInput');
+    const sendBtn         = document.getElementById('sendBtn');
+    const chatInput       = document.getElementById('chatInput');
+    const tabsWrapper     = document.querySelector('.tabs-wrapper');
+    const panelsContainer = document.getElementById('panels-container');
+    const welcomeScreen   = document.getElementById('welcome-screen');
+    const header          = document.querySelector('.header');
+    const bookUrl         = "https://www.planetebook.com/free-ebooks/the-great-gatsby.pdf";
 
-    async function sendQuestion() {
-      const question = input.value.trim();
-      if (!question) return;
+    // Hide header, tabs & panels on load
+    header.style.display         = 'none';
+    tabsWrapper.style.display    = 'none';
+    panelsContainer.style.display= 'none';
 
-      const entry = document.createElement('div');
-      entry.className = 'entry';
+    // Disable send on empty input
+    sendBtn.disabled = true;
+    chatInput.addEventListener('input', () => {
+      sendBtn.disabled = !chatInput.value.trim();
+    });
 
-      const qElem = document.createElement('div');
-      qElem.className = 'question-text';
-      qElem.innerText = question;
-      entry.appendChild(qElem);
+    // Show skeleton placeholders
+    function showSkeleton() {
+      const titleEl = document.getElementById('page-title');
+      const subEl   = document.getElementById('page-subtitle');
+      titleEl.textContent = '';
+      subEl.textContent   = '';
+      titleEl.classList.add('skeleton','skel-title');
+      subEl.classList.add('skeleton','skel-subtitle');
 
-      const spinner = document.createElement('div');
-      spinner.className = 'loading';
-      spinner.innerHTML = `
-        <div class="skeleton-card">
-          <div class="skeleton-line short"></div>
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line"></div>
+      // Tabs skeleton
+      tabsWrapper.innerHTML = '';
+      for (let i = 0; i < 6; i++) {
+        const tab = document.createElement('div');
+        tab.className = 'skeleton skel-tab';
+        tabsWrapper.appendChild(tab);
+      }
+
+      // Panel skeleton
+      panelsContainer.innerHTML = '';
+      const panel = document.createElement('div');
+      panel.className = 'item-panel active';
+      panel.innerHTML = `
+        <div class="skeleton skel-card"></div>
+        <div class="skeleton skel-card"></div>
+        <div class="skeleton skel-quote"></div>
+        <div class="skel-refs-grid">
+          <div class="skeleton skel-ref-card"></div>
+          <div class="skeleton skel-ref-card"></div>
+          <div class="skeleton skel-ref-card"></div>
         </div>
       `;
-      entry.appendChild(spinner);
-
-      conv.appendChild(entry);
-      window.scrollTo(0, document.body.scrollHeight);
-      input.value = '';
-
-      const resp = await fetch('/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question })
-      });
-      const { cards } = await resp.json();
-      entry.removeChild(spinner);
-
-      const full = cards.join(' ');
-      const points = full
-        .split('.')
-        .map(s => s.trim())
-        .filter(s => s.length)
-        .map(s => s + '.');
-
-      const grid = document.createElement('div');
-      grid.className = 'flashcard-grid';
-
-      const card = document.createElement('div');
-      card.className = 'flashcard';
-
-      const body = document.createElement('div');
-      body.className = 'card-body';
-
-      const ul = document.createElement('ul');
-      ul.className = 'card-list';
-
-      points.forEach(text => {
-        const li = document.createElement('li');
-        li.className = 'card-list-item';
-        li.innerText = text;
-        ul.appendChild(li);
-      });
-
-      body.appendChild(ul);
-      card.appendChild(body);
-      grid.appendChild(card);
-      entry.appendChild(grid);
-
-      window.scrollTo(0, document.body.scrollHeight);
+      panelsContainer.appendChild(panel);
     }
 
-    document.getElementById('askBtn').onclick = sendQuestion;
-    input.addEventListener('keypress', e => {
-      if (e.key === 'Enter') sendQuestion();
+    // Clear skeletons
+    function clearSkeleton() {
+      document.getElementById('page-title').classList.remove('skeleton','skel-title');
+      document.getElementById('page-subtitle').classList.remove('skeleton','skel-subtitle');
+      tabsWrapper.innerHTML     = '';
+      panelsContainer.innerHTML = '';
+    }
+
+    // Fetch & render
+    async function askGatsby(question) {
+      if (!question) return;
+
+      // On first click: hide welcome, show header + tabs/panels
+      if (welcomeScreen.style.display !== 'none') {
+        welcomeScreen.style.display   = 'none';
+        header.style.display          = '';
+        tabsWrapper.style.display     = '';
+        panelsContainer.style.display = '';
+      }
+
+      sendBtn.disabled = true;
+      sendBtn.classList.add('loading');
+      chatInput.value = '';
+      clearSkeleton();
+      showSkeleton();
+
+      try {
+        const res  = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+        const data = await res.json();
+        renderResponse(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        sendBtn.classList.remove('loading');
+        sendBtn.disabled = !chatInput.value.trim();
+        chatInput.focus();
+      }
+    }
+
+    // Render API response
+    function renderResponse(data) {
+      clearSkeleton();
+      document.getElementById('page-title').textContent    = data.title;
+      document.getElementById('page-subtitle').textContent = data.subtitle;
+
+      // Tabs
+      tabsWrapper.innerHTML = '';
+      data.items.forEach((item, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'tab-btn' + (idx === 0 ? ' active' : '');
+        btn.textContent = item.name;
+        btn.addEventListener('click', () => selectTab(idx));
+        tabsWrapper.appendChild(btn);
+      });
+
+      // Panels
+      panelsContainer.innerHTML = '';
+      data.items.forEach((item, idx) => {
+        const panel = document.createElement('div');
+        panel.className = 'item-panel' + (idx === 0 ? ' active' : '');
+        panel.innerHTML = `
+          <div class="card"><h3>Description</h3><p>${item.description}</p></div>
+          <div class="card"><h3>Analysis</h3><p>${item.analysis}</p></div>
+          <div class="card key-quote">
+            <h3>Key Quote</h3>
+            <blockquote>${item.key_quote}</blockquote>
+            <div class="quote-page">— Page ${item.quote_page}</div>
+          </div>
+          <div class="references"><h3>Page References</h3>
+            <div class="refs-grid">
+              ${item.page_references.map(ref => `
+                <div class="ref-card">
+                  <p class="ref-label">${ref.label}</p>
+                  <button
+                    class="page-btn"
+                    onclick="window.open('${bookUrl}#page=${ref.page}', '_blank')"
+                  >
+                    Go to page ${ref.page}
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        panelsContainer.appendChild(panel);
+      });
+    }
+
+    // Tab switch
+    function selectTab(idx) {
+      document.querySelectorAll('.tab-btn').forEach((btn, i) =>
+        btn.classList.toggle('active', i === idx)
+      );
+      document.querySelectorAll('.item-panel').forEach((panel, i) =>
+        panel.classList.toggle('active', i === idx)
+      );
+    }
+
+    // Events
+    sendBtn.addEventListener('click', () => askGatsby(chatInput.value.trim()));
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        askGatsby(chatInput.value.trim());
+      }
     });
   </script>
 </body>

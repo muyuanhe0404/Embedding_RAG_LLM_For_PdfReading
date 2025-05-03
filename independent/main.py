@@ -3,12 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-from in_p import answer_rag   
+from typing import Any, Dict
+from typing_extensions import TypedDict
+from in_p import answer_rag_json
 
 app = FastAPI()
 
-# CORS to POST
+# Allow your front-end origin (adjust as needed)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,28 +17,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# endpoint
 class AskRequest(BaseModel):
     question: str
 
-class AskResponse(BaseModel):
-    cards: list[str]
+# Define the shape of the JSON you expect to return
+class PageReference(TypedDict):
+    label: str
+    page: int
+
+class SymbolItem(TypedDict):
+    name: str
+    description: str
+    analysis: str
+    key_quote: str
+    quote_page: int
+    page_references: list[PageReference]
+
+class AskResponse(TypedDict):
+    title: str
+    subtitle: str
+    items: list[SymbolItem]
 
 @app.post("/ask", response_model=AskResponse)
-async def ask(req: AskRequest):
-    print("▶️ Received question:", req.question)
-    ans = answer_rag(req.question)
-    cards = [s.strip() + "." for s in ans.split(".") if s.strip()]
-    return AskResponse(cards=cards)
+async def ask(request: AskRequest) -> AskResponse:
+    """
+    Receives { question }, runs RAG + LLM, and returns the full
+    analysis JSON, including subtitle, full quotes, quote_page,
+    and page_references.
+    """
+    # Call into your updated in_p.answer_rag_json, which now
+    # builds and parses the JSON schema we defined.
+    result: Dict[str, Any] = answer_rag_json(request.question)
+    return result
 
-# index.html at GET /
 @app.get("/", include_in_schema=False)
 async def root():
     return FileResponse("index.html")
 
-# all other static files (CSS, JS) under /static
-app.mount(
-    "/static",
-    StaticFiles(directory=".", html=False),
-    name="static"
-)
+app.mount("/static", StaticFiles(directory="."), name="static")
