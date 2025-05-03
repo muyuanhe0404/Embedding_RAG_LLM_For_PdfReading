@@ -1,0 +1,13 @@
+pdfminer.six
+faiss-cpu
+sentence-transformers
+transformers
+accelerate
+bitsandbytes
+jupyter
+nbconvert
+fastapi[all]
+uvicorn[standard]
+pyngrok
+nest-asyncio
+openai

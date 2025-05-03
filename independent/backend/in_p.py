@@ -1,12 +1,10 @@
 import os
-# 1️⃣ 在任何 transformers / tokenizers 之前关闭并行，以避免死锁和 segfault
 os.environ["TOKENIZERS_PARALLELISM"]    = "false"
 os.environ["OMP_NUM_THREADS"]          = "1"
 os.environ["MKL_NUM_THREADS"]          = "1"
 os.environ["NUMEXPR_NUM_THREADS"]      = "1"
-os.environ["TRANSFORMERS_NO_TF"]       = "1"   # 也可以放这里
+os.environ["TRANSFORMERS_NO_TF"]       = "1"   
 
-# 2️⃣ 动态选择设备，优先使用 CUDA，否则落回 CPU
 import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"⠂ Running on device = {DEVICE}")
@@ -14,7 +12,6 @@ print(f"⠂ Running on device = {DEVICE}")
 import pickle
 import json
 import logging
-
 import faiss
 import openai
 import torch
@@ -22,15 +19,15 @@ from pdfminer.high_level import extract_text
 from sentence_transformers import SentenceTransformer, CrossEncoder
 
 
-# API key
-api_key = os.getenv("OPENAI_API_KEY") #use your own key
+# secret API key
+api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise RuntimeError("Missing OPENAI_API_KEY environment variable")
 
 openai.api_key = api_key
 
 # Paths
-BASE_DIR = os.path.dirname(__file__)        # path to your project folder
+BASE_DIR = "../"
 DATA_DIR = os.path.join(BASE_DIR, "data")   # <project root>/data
 
 PDF_PATH    = os.path.join(DATA_DIR, "the-great-gatsby.pdf")
@@ -197,7 +194,7 @@ Please answer using the same JSON schema as above.
         f"Context (from relevant passages):\n{context}\n\n"
         f"User’s question:\n\"{question}\"\n\n"
         "Please answer using the JSON schema below, generating one title and one subtitle based on the question. \n"
-        "There should be at least 3 page references. \n"
+        "3 page references or more will be great!. \n"
         "Also round 5 items will be perfect!\n"
         + schema
     )
@@ -205,7 +202,7 @@ Please answer using the same JSON schema as above.
     messages = [{"role": "system", "content": system_prompt}] + few_shot_messages + [{"role": "user", "content": user_prompt}]
 
     response = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4.1-nano",
         messages=messages,
         temperature=0.7,
     )
@@ -230,28 +227,28 @@ Please answer using the same JSON schema as above.
 
     return data
 
-import time
+# import time
 
-test_questions = [
-    # "What is the significance of the green light at the end of Daisy’s dock?",
-    # "How does the Valley of Ashes illustrate the novel’s critique of moral decay?",
-    # "What role does Nick Carraway play as narrator?",
-    # "In what ways does Daisy Buchanan embody both illusion and reality?",
-    # "Why does Gatsby throw lavish parties?"
-    "What are the major symbols in The Great Gatsby, and what do they each represent?",
-    # "How does The Great Gatsby portray different social classes",
-    "What are the major themes of the novel"
-]
+# test_questions = [
+#     # "What is the significance of the green light at the end of Daisy’s dock?",
+#     # "How does the Valley of Ashes illustrate the novel’s critique of moral decay?",
+#     # "What role does Nick Carraway play as narrator?",
+#     # "In what ways does Daisy Buchanan embody both illusion and reality?",
+#     # "Why does Gatsby throw lavish parties?",
+#     # "How does The Great Gatsby portray different social classes",
+#     "What are the major symbols in The Great Gatsby",
+#     "What are the major themes of the novel"
+# ]
 
-for q in test_questions:
-    start = time.perf_counter()
-    try:
-        answer = answer_rag_json(q)
-    except Exception as e:
-        answer = f"Error: {e}"
-    elapsed = time.perf_counter() - start
-    print("Q:", q)
-    print("A:", answer)
-    print(f"→ Time: {elapsed:.3f} s")
-    print("-" * 80)
+# for q in test_questions:
+#     start = time.perf_counter()
+#     try:
+#         answer = answer_rag_json(q)
+#     except Exception as e:
+#         answer = f"Error: {e}"
+#     elapsed = time.perf_counter() - start
+#     print("Q:", q)
+#     print("A:", answer)
+#     print(f"→ Time: {elapsed:.3f} s")
+#     print("-" * 80)
 

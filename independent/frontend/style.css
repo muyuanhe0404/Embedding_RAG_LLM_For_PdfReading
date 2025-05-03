@@ -1,18 +1,26 @@
-/* style.css */
-
 /* —————————————————————————— */
 /* Global & Layout             */
 /* —————————————————————————— */
 *, *::before, *::after {
   box-sizing: border-box;
 }
+
+html {
+  font-size: 15px;
+}
+
 body {
   margin: 0;
   padding-bottom: 5rem;
-  font-family: 'Inter', sans-serif;
-  background: #f3f4f6;
+  font-family: 'Poppins', sans-serif;
+  /* Subtle animated gradient background */
+  background: linear-gradient(115deg, #f3f4f6, #e5e7eb, #f3f4f6);
+  background-size: 200% 200%;
+  animation: bgShift 20s ease infinite;
   color: #111827;
 }
+
+/* Main container */
 .container-main {
   max-width: 900px;
   margin: 2rem auto;
@@ -25,10 +33,19 @@ body {
 .header {
   text-align: center;
 }
+
 #page-title {
   font-size: 1.75rem;
   font-weight: 600;
+  /* Gradient text animation */
+  background: linear-gradient(90deg, #7c3aed, #3b82f6, #10b981);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-size: 300% 300%;
+  animation: gradientText 3s ease infinite;
 }
+
 .app-subtitle {
   margin-top: 0.5rem;
   color: #6b7280;
@@ -37,21 +54,22 @@ body {
 /* —————————————————————————— */
 /* Welcome Screen               */
 /* —————————————————————————— */
-/* Push the welcome content down closer to vertical center */
 #welcome-screen {
   text-align: center;
   margin: 25vh auto 2rem;
 }
+
 #welcome-screen h2 {
-  font-size: 1.75rem;
+  font-size: 2rem;
+  font-weight: 700;
   color: #111827;
 }
+
 .welcome-sub {
   margin-top: 0.5rem;
-  color: #6b7280;
+  color: #111827;
 }
 
-/* Force exactly three cards in a row on desktop */
 .suggestions-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(280px, 1fr));
@@ -59,7 +77,6 @@ body {
   margin-top: 4rem;
 }
 
-/* Suggestion cards styling */
 .suggestion-card {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -79,7 +96,6 @@ body {
   margin-bottom: 0.5rem;
   color: #7c3aed;
 }
-/* Middle card accent */
 .suggestion-card:nth-child(2) strong {
   color: #3b82f6;
 }
@@ -88,34 +104,92 @@ body {
   line-height: 1.5;
   color: #111827;
 }
-
 /* —————————————————————————— */
-/* Tabs                          */
+/* Error‐panel centering & sizing */
+/* —————————————————————————— */
+.item-panel.error-panel {
+  /* fill the available panel area */
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 30rem;          /* ensure some vertical space */
+}
+
+.card.error-card {
+  /* make it wider & center inside its flex parent */
+  width: 90%;
+  max-width: 40rem;           /* ~640px */
+  margin: 0 auto;
+  padding: 2rem;              /* a bit more breathing room */
+}
+/* —————————————————————————— */
+/* Tabs                         */
 /* —————————————————————————— */
 .tabs-wrapper {
   display: flex;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
   gap: 0.5rem;
-  white-space: nowrap;
+  padding: 1rem 0;
   position: sticky;
   top: 0;
-  background: #f3f4f6;
-  padding: 1rem 0;
+  background: transparent;          /* allow animated page bg to show */
+  margin-bottom: 1.5rem;
   border-bottom: 1px solid #e5e7eb;
+  justify-content: center;          /* default until JS toggles scrollable/centered */
   z-index: 10;
 }
+.tabs-wrapper.scrollable {
+  justify-content: flex-start;
+}
+.tabs-wrapper.centered {
+  justify-content: center;
+}
+.tabs-wrapper::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Tab buttons */
 .tab-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  scroll-snap-align: start;
   padding: 0.5rem 1rem;
   border: none;
-  background: #e5e7eb;
   border-radius: 0.5rem;
-  cursor: pointer;
+  background: #d1d5db;
+  color: #111827;
   font-weight: 500;
-  transition: background 0.2s;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  position: relative;              
 }
+.tab-btn:hover {
+  background: #cbd5e1;
+}
+.tab-btn:active,
 .tab-btn.active {
   background: #c7d2fe;
   color: #1e3a8a;
+}
+
+/* Animated underline */
+.tab-btn::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 3px;
+  background: #7c3aed;
+  transition: width 0.3s ease, left 0.3s ease;
+}
+.tab-btn:hover::after,
+.tab-btn.active::after {
+  width: 80%;
+  left: 10%;
 }
 
 /* —————————————————————————— */
@@ -125,6 +199,7 @@ body {
   position: relative;
   min-height: 28rem;
 }
+
 .item-panel {
   position: absolute;
   top: 0; left: 0;
@@ -142,6 +217,7 @@ body {
   transform: translateY(0);
   pointer-events: auto;
 }
+
 .card {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -149,6 +225,27 @@ body {
   padding: 0.75rem;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+  z-index: 0;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: conic-gradient(
+    from 180deg,
+    #d8b4fe 0%, #a5b4fc 25%, #fcd34d 50%,
+    #fdba74 75%, #d8b4fe 100%
+  );
+  filter: blur(30px);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: -1;
+}
+.card:hover::before {
+  opacity: 1;
 }
 .card:hover {
   transform: translateY(-4px);
@@ -165,7 +262,7 @@ body {
   line-height: 1.5;
 }
 
-/* Key Quote */
+/* Key quote styling */
 .key-quote {
   grid-column: 1 / -1;
   background: #e0e7ff;
@@ -184,7 +281,7 @@ body {
   color: #4b5563;
 }
 
-/* References */
+/* References grid */
 .references {
   grid-column: 1 / -1;
   padding: 1rem;
@@ -209,6 +306,27 @@ body {
   justify-content: space-between;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+  z-index: 0;
+}
+.ref-card::before {
+  content: "";
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: conic-gradient(
+    from 180deg,
+    #d8b4fe 0%, #a5b4fc 25%, #fcd34d 50%,
+    #fdba74 75%, #d8b4fe 100%
+  );
+  filter: blur(30px);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: -1;
+}
+.ref-card:hover::before {
+  opacity: 1;
 }
 .ref-card:hover {
   transform: translateY(-4px);
@@ -233,6 +351,7 @@ body {
   font-weight: 500;
   border-radius: 1rem;
   transition: background 0.2s, transform 0.2s;
+  cursor: pointer;
 }
 .page-btn::before {
   content: "📖";
@@ -243,7 +362,9 @@ body {
   transform: translateY(-1px);
 }
 
-/* Chat Input & Send Button */
+/* —————————————————————————— */
+/* Chat Input & Send Button     */
+/* —————————————————————————— */
 #footerInput {
   position: fixed;
   bottom: 1.5rem;
@@ -308,15 +429,20 @@ body {
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
+
+/* Spinner keyframes */
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* Skeleton Loading */
+/* —————————————————————————— */
+/* Skeleton Loading             */
+/* —————————————————————————— */
 .skeleton {
   position: relative;
   background-color: #e5e7eb;
   overflow: hidden;
+  animation: fade 1.5s ease-in-out infinite;
 }
 .skeleton::after {
   content: "";
@@ -331,7 +457,6 @@ body {
   );
   animation: shimmer 1.2s ease-in-out infinite;
 }
-/* Skeleton shapes */
 .skel-title {
   width: 50%; height: 2rem;
   margin: 0.5rem auto;
@@ -371,17 +496,60 @@ body {
 @keyframes shimmer {
   to { transform: translateX(150%); }
 }
+@keyframes fade {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 0.4; }
+}
 
-/* Responsive adjustments */
+/* —————————————————————————— */
+/* Responsive adjustments       */
+/* —————————————————————————— */
 @media (max-width: 640px) {
   .item-panel {
     grid-template-columns: 1fr;
   }
+
+  /* Swipeable, overflow-aware refs */
   .refs-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    gap: 1rem;
+    padding: 1rem 0;
+    justify-content: center;
   }
-  /* For narrow screens, stack suggestions vertically */
+  .refs-grid.scrollable {
+    justify-content: flex-start;
+  }
+  .refs-grid.centered {
+    justify-content: center;
+  }
+  .refs-grid::-webkit-scrollbar {
+    width: 0; height: 0;
+  }
+  .ref-card {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  /* Stack suggestions vertically */
   .suggestions-grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* —————————————————————————— */
+/* Keyframe Animations          */
+/* —————————————————————————— */
+@keyframes gradientText {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes bgShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }

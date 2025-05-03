@@ -1,26 +1,27 @@
+# backend/main.py
+import os
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Any, Dict
 from typing_extensions import TypedDict
 from in_p import answer_rag_json
 
-app = FastAPI()
+BASE_DIR     = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = BASE_DIR / "frontend"
 
-# Allow your front-end origin (adjust as needed)
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
 class AskRequest(BaseModel):
     question: str
 
-# Define the shape of the JSON you expect to return
 class PageReference(TypedDict):
     label: str
     page: int
@@ -40,18 +41,11 @@ class AskResponse(TypedDict):
 
 @app.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest) -> AskResponse:
-    """
-    Receives { question }, runs RAG + LLM, and returns the full
-    analysis JSON, including subtitle, full quotes, quote_page,
-    and page_references.
-    """
-    # Call into your updated in_p.answer_rag_json, which now
-    # builds and parses the JSON schema we defined.
-    result: Dict[str, Any] = answer_rag_json(request.question)
+    result: Dict[str,Any] = answer_rag_json(request.question)
     return result
 
-@app.get("/", include_in_schema=False)
-async def root():
-    return FileResponse("index.html")
-
-app.mount("/static", StaticFiles(directory="."), name="static")
+app.mount(
+    "/", 
+    StaticFiles(directory=str(FRONTEND_DIR), html=True), 
+    name="frontend"
+)

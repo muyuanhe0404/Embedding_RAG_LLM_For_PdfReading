@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>Gatsby Symbols Explorer</title>
-  <link rel="stylesheet" href="static/style.css" />
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="container-main">
@@ -71,10 +72,13 @@
     const header          = document.querySelector('.header');
     const bookUrl         = "https://www.planetebook.com/free-ebooks/the-great-gatsby.pdf";
 
+    // keep the last question for retry
+    let lastQuestion = "";
+
     // Hide header, tabs & panels on load
-    header.style.display         = 'none';
-    tabsWrapper.style.display    = 'none';
-    panelsContainer.style.display= 'none';
+    header.style.display          = 'none';
+    tabsWrapper.style.display     = 'none';
+    panelsContainer.style.display = 'none';
 
     // Disable send on empty input
     sendBtn.disabled = true;
@@ -124,9 +128,28 @@
       panelsContainer.innerHTML = '';
     }
 
+    // Show an error panel with retry
+    function showError(message) {
+      clearSkeleton();
+      panelsContainer.innerHTML = `
+        <div class="item-panel active error-panel">
+          <div class="card error-card">
+            <h3>Oops—something went wrong</h3>
+            <p>${message}. Please try again.</p>
+            <button id="retryBtn" class="page-btn">Retry</button>
+          </div>
+        </div>
+      `;
+      document
+        .getElementById("retryBtn")
+        .addEventListener("click", () => askGatsby(lastQuestion));
+    }
+
     // Fetch & render
     async function askGatsby(question) {
       if (!question) return;
+      // save for retry
+      lastQuestion = question;
 
       // On first click: hide welcome, show header + tabs/panels
       if (welcomeScreen.style.display !== 'none') {
@@ -143,15 +166,19 @@
       showSkeleton();
 
       try {
-        const res  = await fetch('/ask', {
+        const res = await fetch('/ask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question }),
         });
+        if (!res.ok) {
+          throw new Error(`Server returned ${res.status}`);
+        }
         const data = await res.json();
         renderResponse(data);
       } catch (err) {
         console.error(err);
+        showError(err.message || 'Unable to reach the server');
       } finally {
         sendBtn.classList.remove('loading');
         sendBtn.disabled = !chatInput.value.trim();
@@ -173,6 +200,11 @@
         btn.textContent = item.name;
         btn.addEventListener('click', () => selectTab(idx));
         tabsWrapper.appendChild(btn);
+        requestAnimationFrame(() => {
+            const isOverflowing = tabsWrapper.scrollWidth > tabsWrapper.clientWidth;
+            tabsWrapper.classList.toggle('scrollable', isOverflowing);
+            tabsWrapper.classList.toggle('centered', !isOverflowing);
+        });
       });
 
       // Panels
@@ -205,6 +237,13 @@
           </div>
         `;
         panelsContainer.appendChild(panel);
+        // make refs-grid swipeable & centre/no-centre based on overflow
+        const grid = panel.querySelector('.refs-grid');
+        requestAnimationFrame(() => {
+          const isOverflowing = grid.scrollWidth > grid.clientWidth;
+          grid.classList.toggle('scrollable', isOverflowing);
+          grid.classList.toggle('centered', !isOverflowing);
+        });
       });
     }
 
