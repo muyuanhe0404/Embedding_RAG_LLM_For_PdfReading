@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Gatsby Symbols Explorer</title>
+  <title>Gatsby Expert</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 </head>
@@ -164,7 +164,7 @@
       chatInput.value = '';
       clearSkeleton();
       showSkeleton();
-
+      let start = performance.now();
       try {
         const res = await fetch('/ask', {
           method: 'POST',
@@ -176,6 +176,8 @@
         }
         const data = await res.json();
         renderResponse(data);
+        let end = performance.now();
+        console.log(`Round-trip + render: ${(end - start).toFixed(1)} ms`);
       } catch (err) {
         console.error(err);
         showError(err.message || 'Unable to reach the server');

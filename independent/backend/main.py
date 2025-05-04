@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from typing import Any, Dict
 from typing_extensions import TypedDict
 from in_p import answer_rag_json
-
+import time
 BASE_DIR     = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 

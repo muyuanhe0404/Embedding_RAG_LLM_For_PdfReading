@@ -57,7 +57,7 @@ $ python3 backend/in_p.py
 
 # 4️⃣ Launch
 $ cd independent/backend
-$ uvicorn backend.main:app --port 8000 --reload
+$ uvicorn main:app --port 8000 --reload
 $ open http://localhost:8000 to see
 ```
 
@@ -85,7 +85,7 @@ $ open http://localhost:8000 to see
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | — | Your OpenAI secret key |
-| `TOP_K` | `3` | Number of passages returned by FAISS |
+| `TOP_K` | `5` | Number of passages returned by FAISS |
 | `MODEL_NAME` | `gpt-4o-mini` | Chat model for answer generation (can be changed)|
 
 Adjust constants in `backend/answer_rag.py` to tune passage size, overlap, or temperature.

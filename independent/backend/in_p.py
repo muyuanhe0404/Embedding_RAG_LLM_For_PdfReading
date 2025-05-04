@@ -1,8 +1,8 @@
 import os
-os.environ["TOKENIZERS_PARALLELISM"]    = "false"
-os.environ["OMP_NUM_THREADS"]          = "1"
-os.environ["MKL_NUM_THREADS"]          = "1"
-os.environ["NUMEXPR_NUM_THREADS"]      = "1"
+os.environ["TOKENIZERS_PARALLELISM"]    = "true"
+os.environ["OMP_NUM_THREADS"]          = "8"
+os.environ["MKL_NUM_THREADS"]          = "8"
+os.environ["NUMEXPR_NUM_THREADS"]      = "8"
 os.environ["TRANSFORMERS_NO_TF"]       = "1"   
 
 import torch
@@ -15,6 +15,9 @@ import logging
 import faiss
 import openai
 import torch
+import time
+import re
+from fastapi import HTTPException
 from pdfminer.high_level import extract_text
 from sentence_transformers import SentenceTransformer, CrossEncoder
 
@@ -39,7 +42,7 @@ logger = logging.getLogger(__name__)
 def load_pdf(path: str) -> str:
     return extract_text(path)
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 200, overlap: int = 50) -> list[str]:
     tokens = text.split()
     chunks = []
     start = 0
@@ -73,27 +76,30 @@ else:
 embed_model   = SentenceTransformer("paraphrase-MiniLM-L6-v2", device=DEVICE)
 cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device=DEVICE)
 
-def retrieve(question: str, top_k: int = 3, fetch_k: int = 6) -> list[str]:
+def retrieve(question: str, top_k: int = 5, fetch_k: int = 3) -> list[str]:
     q_vec = embed_model.encode(question, convert_to_numpy=True)
     _, ids = index.search(q_vec.reshape(1, -1), fetch_k)
     candidates = [chunks[i] for i in ids[0]]
-    scores = cross_encoder.predict([(question, txt) for txt in candidates])
+    pairs = [(question, txt) for txt in candidates]  
+    # t0 = time.perf_counter()
+    scores = cross_encoder.predict(pairs, batch_size=len(pairs))
+    # t1 = time.perf_counter() - t0
+    # print(f"re-rank (batched) took {t1:.3f}s")
     ranked = [txt for _, txt in sorted(zip(scores, candidates), reverse=True)]
     return ranked[:top_k]
 
-def answer_rag_json(question: str, top_k: int = 5) -> dict:
+def answer_rag_json(question: str, top_k: int = 3) -> dict:
     docs = retrieve(question, top_k=top_k)
     context = "\n\n".join(d.replace("\n", " ") for d in docs)
 
     system_prompt = (
-        "You are a knowledgeable literary analysis assistant. "
-        "For each user question, first generate one concise `title` derived from the question, then one descriptive `subtitle`. "
-        "Next, using the provided context, identify the core symbols or motifs present. "
+        "You are a knowledgeable literary analysis assistant for the book the Great Gatsby. "
+        "For each user question, output only a single JSON object exactly matching the schema."
         "Always include a `quote_page` integer for each symbol and the full, un-truncated `key_quote` end with period. "
         "Supply a `page_references` array with as many descriptive entries as are relevant—do not default to any particular number. "
-        "For the `analysis` field, provide a concise yet thoughtful multi-sentence explanation (around 2–3 sentences) that elaborates on the symbol’s thematic role without imposing a strict word limit. "
-        "For the page reference, give me at least 3 references depending on the questions."
-        "Output only a single JSON object exactly matching the schema."
+        "For the `analysis` field, provide a concise yet thoughtful multi-sentence explanation (around 2-3 sentences) that elaborates on the symbol's thematic role without imposing a strict word limit. "
+        "Every field name and string must be double-quoted."
+        "In page_references, each object must have exactly two properties: Do not emit any bare numbers or extra fields."
     )
 
     few_shot_messages = [
@@ -103,7 +109,7 @@ def answer_rag_json(question: str, top_k: int = 5) -> dict:
 Context (from relevant passages):
 “He stretched out his arms toward the dark water in a curious way and far as I was from him I could have sworn he was trembling. Involuntarily I glanced seaward—and distinguished nothing except a single green light, minute and far away, that might have been the end of a dock.”
 
-User’s question:
+User's question:
 "What does the green light symbolize?"
 
 Please answer using the JSON schema:
@@ -119,17 +125,17 @@ Please answer using the JSON schema:
             "content": """
 {
   "title": "Symbolism of the Green Light",
-  "subtitle": "An exploration of Gatsby’s hopes and the broader American Dream.",
+  "subtitle": "An exploration of Gatsby's hopes and the broader American Dream.",
   "items": [
     {
       "name": "The Green Light",
-      "description": "A beacon at the end of Daisy’s dock symbolizing hope and aspiration.",
-      "analysis": "The green light represents Gatsby’s yearning for Daisy and the promise of a newer future. It also embodies the larger American Dream, calling attention to both its allure and its inevitable elusiveness as characters grapple with idealism versus reality.",
+      "description": "A beacon at the end of Daisy's dock symbolizing hope and aspiration.",
+      "analysis": "The green light represents Gatsby's yearning for Daisy and the promise of a newer future. It also embodies the larger American Dream, calling attention to both its allure and its inevitable elusiveness as characters grapple with idealism versus reality.",
       "key_quote": "He stretched out his arms toward the dark water in a curious way and far as I was from him I could have sworn he was trembling. Involuntarily I glanced seaward—and distinguished nothing except a single green light, minute and far away, that might have been the end of a dock.",
       "quote_page": 23,
       "page_references": [
-        {"label": "Initial mention on Daisy’s dock", "page": 23},
-        {"label": "Gatsby’s reflective gaze", "page": 91}
+        {"label": "Initial mention on Daisy's dock", "page": 23},
+        {"label": "Gatsby's reflective gaze", "page": 91}
       ]
     }
   ]
@@ -142,7 +148,7 @@ Please answer using the JSON schema:
 Context (from relevant passages):
 “This is a valley of ashes—a fantastic farm where ashes grow like wheat into ridges and hills and grotesque gardens; where ashes take the forms of houses...”
 
-User’s question:
+User's question:
 "What is the significance of the Valley of Ashes?"
 
 Please answer using the same JSON schema as above.
@@ -158,13 +164,13 @@ Please answer using the same JSON schema as above.
     {
       "name": "The Valley of Ashes",
       "description": "A bleak wasteland between West Egg and New York City symbolizing industrial and moral decay.",
-      "analysis": "The Valley of Ashes starkly depicts the fallout of unbridled ambition and materialism. Its dusty expanse reflects the moral emptiness beneath the era’s glamorous facade, emphasizing the chasm between wealth and ethical integrity.",
+      "analysis": "The Valley of Ashes starkly depicts the fallout of unbridled ambition and materialism. Its dusty expanse reflects the moral emptiness beneath the era's glamorous facade, emphasizing the chasm between wealth and ethical integrity.",
       "key_quote": "This is a valley of ashes—a fantastic farm where ashes grow like wheat into ridges and hills and grotesque gardens; where ashes take the forms of houses...",
       "quote_page": 27,
       "page_references": [
-        {"label": "Eckleburg’s eyes overlooking the ashes", "page": 27},
-        {"label": "Scene of Myrtle’s demise", "page": 156},
-        {"label": "Nick’s reflection on its symbolism", "page": 162}
+        {"label": "Eckleburg's eyes overlooking the ashes", "page": 27},
+        {"label": "Scene of Myrtle's demise", "page": 156},
+        {"label": "Nick's reflection on its symbolism", "page": 162}
       ]
     }
   ]
@@ -175,12 +181,12 @@ Please answer using the same JSON schema as above.
 
     schema = """{
   "title": "<A concise, question-derived title>",
-  "subtitle": "<A descriptive subtitle reflecting the question’s focus>",
+  "subtitle": "<A descriptive subtitle reflecting the question's focus>",
   "items": [
     {
       "name": "<Symbol or motif name>",
       "description": "<Brief description>",
-      "analysis": "<An explanation of around 2–3 sentences that explores thematic significance>",
+      "analysis": "<An explanation of around 2-3 sentences that explores thematic significance>",
       "key_quote": "<The full, un-truncated quote illustrating the symbol>",
       "quote_page": <int>,
       "page_references": [
@@ -192,40 +198,52 @@ Please answer using the same JSON schema as above.
 
     user_prompt = (
         f"Context (from relevant passages):\n{context}\n\n"
-        f"User’s question:\n\"{question}\"\n\n"
+        f"User's question:\n\"{question}\"\n\n"
         "Please answer using the JSON schema below, generating one title and one subtitle based on the question. \n"
-        "3 page references or more will be great!. \n"
-        "Also round 5 items will be perfect!\n"
+        "if you can generate 3 or more page references it will be great!. \n"
+        "at least 4 items will be perfect!\n"
         + schema
     )
 
     messages = [{"role": "system", "content": system_prompt}] + few_shot_messages + [{"role": "user", "content": user_prompt}]
-
-    response = openai.chat.completions.create(
-        model="gpt-4.1-nano",
-        messages=messages,
-        temperature=0.7,
-    )
-
-    raw = response.choices[0].message.content.strip()
-    logger.debug("ChatGPT raw output: %s", raw)
-
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start < 0 or end < 0 or start >= end:
-        logger.error("Invalid JSON in response: %s", raw)
-        raise ValueError("Invalid JSON from ChatGPT")
-
-    json_str = raw[start : end + 1]
+    t2 = time.perf_counter()
     try:
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        logger.error("JSON decode failed: %s", e)
-        logger.error("JSON string was: %s", json_str)
-        raise
+      response = openai.chat.completions.create(
+          model="gpt-4.1-nano",
+          messages=messages,
+          temperature=0.5,
+          timeout=10
+      )
+    except Exception as e:
+        # detect timeouts:
+        name = type(e).__name__
+        msg  = str(e).lower()
+        if name == "Timeout" or "timeout" in msg:
+            # 504 Gateway Timeout
+            raise HTTPException(status_code=504, detail="Upstream API request timed out")
+        # otherwise re‑raise as a 502 Bad Gateway
+        raise HTTPException(status_code=502, detail=f"Upstream API error: {e}")
+    t3 = time.perf_counter() - t2
+    print(f"[OpenAI] call took {t3:.3f}s")
+    raw = response.choices[0].message.content.strip()
+    # logger.debug("ChatGPT raw output: %s", raw)
 
-
-    return data
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # If fails, fall back to grabbing the first {...} block
+        match = re.search(r'(\{.*\})', raw, re.S)
+        if match:
+            candidate = match.group(1)
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError as e2:
+                logger.error("Fallback JSON decode failed: %s", e2)
+                logger.error("Fallback candidate was: %s", candidate)
+                raise
+        else:
+            logger.error("Could not find any JSON object in the model output")
+            raise ValueError("Invalid JSON from ChatGPT—no object bracketing found")
 
 # import time
 
@@ -237,7 +255,8 @@ Please answer using the same JSON schema as above.
 #     # "Why does Gatsby throw lavish parties?",
 #     # "How does The Great Gatsby portray different social classes",
 #     "What are the major symbols in The Great Gatsby",
-#     "What are the major themes of the novel"
+#     "What are the major themes of the novel",
+      
 # ]
 
 # for q in test_questions:
@@ -251,4 +270,3 @@ Please answer using the same JSON schema as above.
 #     print("A:", answer)
 #     print(f"→ Time: {elapsed:.3f} s")
 #     print("-" * 80)
-

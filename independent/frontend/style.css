@@ -291,10 +291,13 @@ body {
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
 .refs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
   gap: 1rem;
-  margin-top: 1rem;
+  padding: 1rem 0;
+  scroll-padding: 0 1rem;
 }
 .ref-card {
   background: #f9fafb;
@@ -309,6 +312,8 @@ body {
   position: relative;
   overflow: hidden;
   z-index: 0;
+  flex: 0 0 auto;
+  scroll-snap-align: start;
 }
 .ref-card::before {
   content: "";
@@ -324,6 +329,15 @@ body {
   opacity: 0;
   transition: opacity 0.4s ease;
   z-index: -1;
+}
+.refs-grid.centered {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.refs-grid.centered .ref-card {
+  flex: 1 1 calc(33.333% - 1rem); 
+  min-width: 240px;
 }
 .ref-card:hover::before {
   opacity: 1;
