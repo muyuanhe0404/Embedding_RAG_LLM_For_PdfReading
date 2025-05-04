@@ -10,7 +10,7 @@ A light‑weight Retrieval‑Augmented Generation (RAG) demo that converts the n
 
 ## ✨ Features
 
-* **5-8 s latency** on a single CPU core
+* **3-5 s latency** on a single CPU core
 * Minimal **Python + FastAPI** back‑end, **vanilla JS** front‑end (no heavy frameworks)
 * Offline PDF ingestion → FAISS index… only once
 * OpenAI chat completion for final wording
@@ -85,7 +85,7 @@ $ open http://localhost:8000 to see
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | — | Your OpenAI secret key |
-| `TOP_K` | `5` | Number of passages returned by FAISS |
+| `TOP_K` | `3` | Number of passages returned by FAISS |
 | `MODEL_NAME` | `gpt-4o-mini` | Chat model for answer generation (can be changed)|
 
 Adjust constants in `backend/answer_rag.py` to tune passage size, overlap, or temperature.
